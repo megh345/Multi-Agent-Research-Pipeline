@@ -33,13 +33,13 @@ python -m research_pipeline.benchmark
 ```
 research_pipeline/
   fixtures.py        mock articles/documents, keyed by topic_id
-  schemas.py          Finding / FailureReport structured-output contracts
-  mock_tools.py        search_web / fetch_documents custom SDK tools
-  agents_config.py      AgentDefinitions + ClaudeAgentOptions wiring
-  logging_hooks.py       PreToolUse / SubagentStop observability hooks
-  coordinator.py           orchestration: prompts, query(), message parsing
-  verification.py          deterministic checks on structured output
-  benchmark.py               sequential vs. parallel timing
-run_demo.py                    runs all five scenarios
-ARCHITECTURE.md                   flow diagram + task-statement map
+  schemas.py         Finding / FailureReport structured-output contracts
+  mock_tools.py      search_web / fetch_documents custom SDK tools
+  agents_config.py   AgentDefinitions + ClaudeAgentOptions wiring
+  logging_hooks.py   PreToolUse / SubagentStop observability hooks
+  coordinator.py     orchestration: prompts, query(), message parsing
+  verification.py    deterministic checks on structured output
+  benchmark.py       sequential vs. parallel timing
+run_demo.py          runs all five scenarios
+ARCHITECTURE.md      flow diagram + task-statement map
 ```
