@@ -1,22 +1,12 @@
 """
-run_demo.py - runs all five required behaviours in sequence, with clear
-printed headers, so each one can be watched happening independently.
+Run the research pipeline demonstration scenarios.
 
-WHAT: five async scenario functions, one per exercise requirement, each
-calling into research_pipeline.coordinator.run_research() with the
-topic_id fixture chosen specifically to exercise that behaviour (see the
-per-topic comments in research_pipeline/fixtures.py for why each topic_id
-was picked).
+Each scenario calls research_pipeline.coordinator.run_research() with a
+fixture topic selected to show a specific pipeline behavior: parallel
+subagent execution, explicit context passing, structured attribution,
+error propagation, or conflicting source handling.
 
-WHY one script instead of five separate ad hoc runs: the point of this
-file is to be the thing you actually run and watch, in order, once per
-study session - not a test suite. Keeping it as one script makes it
-visible that all five behaviours are facets of the SAME coordinator/
-subagent architecture (agents_config.py + coordinator.py), not five
-unrelated features bolted on separately.
-
-EXAM TASK: demonstrates Tasks 1 through 5 end to end, in the order the
-exercise lists them. Requires ANTHROPIC_API_KEY to be set - see README.md.
+Requires ANTHROPIC_API_KEY to be set; see README.md for setup details.
 """
 from __future__ import annotations
 
