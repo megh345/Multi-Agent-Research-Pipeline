@@ -1,45 +1,80 @@
 # Multi-Agent Research Pipeline
 
-Exercise 4 from the Claude Certified Architect - Foundations exam guide,
-built on the real Claude Agent SDK (Python). See `ARCHITECTURE.md` for
-the flow diagram and a file-to-task-statement map.
+A Python research orchestration project that uses the Claude Agent SDK to
+coordinate specialized subagents for evidence gathering, document review,
+and final report synthesis.
+
+The pipeline accepts a research topic, sends work to a web researcher and
+document analyst, validates that extracted findings include source
+metadata, and produces an attributed Markdown report. Mock data sources
+keep the workflow deterministic so parallel execution, retrieval
+failures, and conflicting claims can be demonstrated reliably.
+
+## What this project demonstrates
+
+- Multi-agent coordination with specialized subagents.
+- Parallel fan-out for independent evidence gathering.
+- Explicit context passing between coordinator and subagents.
+- Structured findings with required source attribution.
+- Deterministic handling of timeouts, partial results, and conflicting
+  sources.
+- Hook-based observability for subagent spawn and completion events.
+
+For the full orchestration diagram and module-level architecture, see
+`ARCHITECTURE.md`.
+
+## Tech stack
+
+- Python 3.10+
+- Claude Agent SDK
+- In-process MCP tools for deterministic mock research sources
 
 ## Setup
+
+Create and activate a virtual environment if desired, then install the
+project dependency:
 
 ```bash
 pip install -r requirements.txt
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-This is a real SDK application - `run_demo.py` and `benchmark.py` make
-real Claude API calls (the coordinator and all three subagents are real
-Sonnet sessions). Only the *data sources* (`search_web`, `fetch_documents`)
-are mocked, via `research_pipeline/fixtures.py` - see
-`ARCHITECTURE.md`'s "Where determinism lives" section for what that
-does and doesn't guarantee.
+`run_demo.py` and `benchmark.py` make real Claude API calls. The
+coordinator and subagents run through the SDK; only the research data
+sources are mocked through `research_pipeline/fixtures.py`.
 
 ## Run
 
 ```bash
-# All five required behaviours, in order, with printed headers:
+# Run all demonstration scenarios:
 python run_demo.py
 
-# Sequential vs. parallel spawning, wall-clock comparison:
+# Compare sequential and parallel subagent execution:
 python -m research_pipeline.benchmark
 ```
 
-## Project layout
+## Repository structure
 
-```
+The main implementation lives in `research_pipeline/`. This README keeps
+the layout concise; `ARCHITECTURE.md` provides the deeper flow and design
+rationale.
+
+```text
 research_pipeline/
-  fixtures.py        mock articles/documents, keyed by topic_id
-  schemas.py         Finding / FailureReport structured-output contracts
-  mock_tools.py      search_web / fetch_documents custom SDK tools
-  agents_config.py   AgentDefinitions + ClaudeAgentOptions wiring
-  logging_hooks.py   PreToolUse / SubagentStop observability hooks
-  coordinator.py     orchestration: prompts, query(), message parsing
-  verification.py    deterministic checks on structured output
-  benchmark.py       sequential vs. parallel timing
-run_demo.py          runs all five scenarios
-ARCHITECTURE.md      flow diagram + task-statement map
+  fixtures.py        deterministic mock articles and documents
+  schemas.py         shared Finding and FailureReport contracts
+  mock_tools.py      SDK tools for mock search and document retrieval
+  agents_config.py   subagent definitions and SDK option wiring
+  logging_hooks.py   subagent lifecycle observability hooks
+  coordinator.py     top-level orchestration and stream parsing
+  verification.py    deterministic attribution checks
+  benchmark.py       sequential vs. parallel timing comparison
+run_demo.py          runnable scenario demo
+ARCHITECTURE.md      detailed architecture and data-flow notes
 ```
+
+## Notes
+
+This project was designed as a deterministic multi-agent demo, not a live
+web research product. It uses fixed fixtures so results are repeatable
+while still exercising realistic agent coordination patterns.
