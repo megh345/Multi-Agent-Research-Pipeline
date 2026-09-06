@@ -1,54 +1,37 @@
 """
-fixtures.py - mock data sources for the research pipeline demo.
+Deterministic source fixtures used by the research pipeline.
 
-WHAT: Fake articles and internal documents, grouped by a fixed set of
-`topic_id`s, plus a registry of which topic_ids should simulate a search
-timeout. This is the only place "the internet" and "the document store"
-exist in this project - everything downstream (mock_tools.py, the
-subagents, the demo scripts) reads from here.
+The pipeline uses fixed article and document collections instead of live
+network calls so demos, benchmarks, and verification checks are
+repeatable. Each topic ID maps to known evidence, and selected topics can
+simulate predictable failure modes such as search timeouts or conflicting
+source claims.
 
-WHY: the exercise requires "deterministic, repeatable behaviour... to
-trigger timeouts and conflicts on demand." A real web search tool returns
-different results every run and can't be told to fail on command.
-Centralizing fixed, hand-authored data means the same topic_id always
-produces the same articles/documents (or the same simulated failure),
-every run, with zero network calls - and fixing a typo in one place
-updates every consumer.
-
-EXAM TASK: this file is the "mock data sources, not real web search"
-requirement, and the setup for Tasks 5.1 (error propagation) and 5.2
-(conflicting sources).
-
-ANTI-PATTERN: scattering literal source strings ("EVs hit 18% in
-2024...") inside subagent prompts or inline in mock_tools.py instead of
-here. That would make it impossible to point at "the fixture" as a
-single reviewable source of truth, and any future addition (a fourth
-topic, a second timeout case) would mean hunting through unrelated
-files.
+Keeping fixture data centralized gives the mock tools, subagents, and
+demo scripts a single source of truth. New topics or failure scenarios
+can be added here without changing orchestration logic.
 """
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
 # Topic 1: ai_regulation_eu
-# Clean, well-covered topic: multiple corroborating sources, no conflicts,
-# no failures. Used for the parallel-spawning benchmark and the baseline
-# structured-output/verification demo (Tasks 1 and 3).
+# Well-covered topic with corroborating sources and no simulated failures.
+# Used by the parallel benchmark and structured-output verification flow.
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Topic 2: grid_battery_storage_2026
-# TIMEOUT DEMO topic (Task 5.1). search_web() always simulates a timeout
-# for this topic_id; fetch_documents() still succeeds, so the coordinator
-# has to proceed on partial (document-only) coverage and say so in the
-# final report instead of silently dropping the gap.
+# Timeout scenario. search_web() always returns a simulated timeout for
+# this topic_id, while fetch_documents() still succeeds. The coordinator
+# should continue with document-only evidence and preserve that limitation
+# in the final report.
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Topic 3: global_ev_adoption_rate
-# CONFLICTING SOURCES demo topic (Task 5.2). Two real-looking articles give
-# different EV market-share numbers for the same year, from different
-# publishers on different dates. Both must survive into the final report
-# with attribution - never merged or averaged into a single number.
+# Conflicting-source scenario. Independent sources report different EV
+# market-share figures for the same year. Both claims should remain
+# attributed separately in the final report.
 # ---------------------------------------------------------------------------
 
 ARTICLES: dict[str, list[dict[str, str]]] = {
@@ -82,11 +65,10 @@ ARTICLES: dict[str, list[dict[str, str]]] = {
             "source_name": "GridTech Weekly",
             "source_url": "https://gridtechweekly.example/storage-investment-surge",
             "published_date": "2026-02-01",
-            # NOTE: this article exists in the fixture set to establish that
-            # data *existed* and was simply unreachable due to the simulated
-            # timeout below - search_web() never actually returns it. Kept
-            # here so the demo can show "attempted but failed" rather than
-            # "nothing existed to find".
+            # This article documents that relevant web evidence exists, even
+            # though search_web() intentionally withholds it for the timeout
+            # scenario. That distinction lets the final report distinguish a
+            # retrieval failure from an empty result set.
             "excerpt": (
                 "Utility-scale battery storage investment reached a record "
                 "$41 billion in the past twelve months, per preliminary "
@@ -179,11 +161,9 @@ DOCUMENTS: dict[str, list[dict[str, str]]] = {
     ],
 }
 
-# Task 5.1: topic_ids for which search_web() deterministically simulates a
-# timeout, regardless of how many times or in what order it's called.
+# Topic IDs for which search_web() deterministically simulates a timeout.
 TIMEOUT_TOPICS: frozenset[str] = frozenset({"grid_battery_storage_2026"})
 
-# The fixed vocabulary mock_tools.py constrains the `topic_id` tool argument
-# to (see mock_tools.py's _topic_enum_schema). A subagent literally cannot
-# pass a topic_id we haven't defined data for.
+# The mock tool schema constrains `topic_id` to this fixed vocabulary, so
+# subagents can only request fixture-backed topics.
 KNOWN_TOPIC_IDS: frozenset[str] = frozenset(ARTICLES) | frozenset(DOCUMENTS)

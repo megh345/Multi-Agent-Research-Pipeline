@@ -1,30 +1,16 @@
 """
-agents_config.py - AgentDefinitions for the three research subagents.
+Agent definitions and SDK options for the research pipeline.
 
-WHAT: Defines web_researcher, document_analyst, and synthesizer as real
-`AgentDefinition` instances, each scoped to exactly the tools it needs,
-plus `build_agent_options()` which assembles the full `ClaudeAgentOptions`
-the coordinator passes to `query()`.
+This module defines three specialized subagents:
+web_researcher, document_analyst, and synthesizer. Each AgentDefinition
+is limited to the tools needed for its role. The researcher can query
+mock web sources, the analyst can query mock documents, and the
+synthesizer has no tools so it must work only from the evidence passed by
+the coordinator.
 
-WHY: `AgentDefinition.tools` restricts a subagent's toolset (tool
-restriction is a first-class SDK feature, not something we bolt on).
-web_researcher gets only search_web; document_analyst gets only
-fetch_documents; synthesizer gets NO tools at all, because its entire job
-is reasoning over findings the coordinator hands it explicitly - it
-should never be able to go fetch its own data and quietly bypass the
-context-passing contract this project exists to demonstrate.
-
-EXAM TASK: Task 2.1/2.2 - real `AgentDefinition` fields (description,
-prompt, tools, model), registered via `ClaudeAgentOptions.agents` and
-gated by `allowed_tools` containing "Agent" (the current name of what
-the exam guide calls the Task tool - see the note in coordinator.py).
-
-ANTI-PATTERN: giving every subagent every tool "just in case". A
-synthesizer with `search_web` access could silently go find its own
-extra sources instead of working only from what the coordinator passed
-it - defeating the "subagents inherit nothing, context must be explicit"
-requirement (Task 2) in a way that's very hard to notice just by reading
-the final report.
+The build_agent_options() helper assembles these agents, the in-process
+MCP server, allowed tools, and optional hooks into the options object used
+by coordinator.query().
 """
 from __future__ import annotations
 
@@ -36,12 +22,9 @@ from research_pipeline.mock_tools import (
     research_tools_server,
 )
 
-# Every subagent is told the exact JSON contract it must return.
-# coordinator.py does `json.loads()` on the Agent tool's result text with
-# no fallback parsing, so if a subagent wraps its answer in prose or a
-# markdown fence, parsing breaks loudly rather than silently producing a
-# malformed report - Task 4.2 (verification) depends on catching that
-# early rather than downstream in the synthesized Markdown.
+# Every subagent receives the same JSON-only response requirement. The
+# coordinator parses Agent results with json.loads(), so malformed output
+# fails immediately instead of producing an incorrectly sourced report.
 _JSON_ONLY_RULE = (
     "Respond with ONLY a single JSON object as your final message. "
     "No markdown code fences, no prose before or after the JSON, no "
@@ -166,20 +149,13 @@ def build_agent_options(
     hooks: dict[str, list[HookMatcher]] | None = None,
 ) -> ClaudeAgentOptions:
     """
-    WHAT: Assembles the ClaudeAgentOptions the coordinator's query() call
-    needs: the three subagents, the mock-tools MCP server, the allow-list
-    that lets Claude invoke them without a manual permission prompt, and
-    (optionally) the observability hooks from logging_hooks.py.
+    Assemble the ClaudeAgentOptions used by the coordinator session.
 
-    WHY "Agent" must be in allowed_tools: without it, every subagent
-    invocation stops the session for manual approval - dead on arrival in
-    an unattended demo/benchmark script. The two mcp__research_tools__*
-    names must ALSO be allow-listed at this top level even though only
-    the subagents call them directly, because permission approval in the
-    SDK happens at the session level, not scoped per-subagent.
-
-    EXAM TASK: Task 2.1 - ClaudeAgentOptions wiring: agents + mcp_servers
-    + allowed_tools + hooks together in one options object.
+    The Agent tool must be allowed so the coordinator can invoke
+    subagents without pausing for manual approval. The mock MCP tools are
+    also allow-listed at the session level because SDK permissions are
+    evaluated for the whole session, even when the calls are made from
+    subagents.
     """
     return ClaudeAgentOptions(
         agents={

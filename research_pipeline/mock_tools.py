@@ -1,28 +1,10 @@
 """
-mock_tools.py - deterministic fake "web search" and "document store" tools.
+Deterministic mock tools for web search and document retrieval.
 
-WHAT: Two custom SDK tools - search_web and fetch_documents - wired to
-research_pipeline.fixtures instead of a real search API or filesystem.
-Wrapped in an in-process MCP server (`create_sdk_mcp_server`) and handed
-to the web_researcher and document_analyst subagents respectively.
-
-WHY: the exercise requires "deterministic, repeatable behaviour... to
-trigger timeouts and conflicts on demand." A real web search tool returns
-different results every run and can't be told to fail on command. Custom
-SDK tools built on an in-process MCP server give us a function we fully
-control: same topic_id in, same (or deliberately-broken) result out,
-every time, with zero network calls.
-
-EXAM TASK: Task 2.4 - custom tools via the in-process MCP server
-(`@tool` decorator + `create_sdk_mcp_server`), registered through
-`ClaudeAgentOptions.mcp_servers` and gated by `allowed_tools` using the
-`mcp__{server_name}__{tool_name}` fully-qualified naming convention
-confirmed in the SDK's custom-tools reference.
-
-ANTI-PATTERN: calling a real search API from inside a study/demo
-environment. Findings would differ across runs, you could never reliably
-reproduce the timeout or conflicting-sources scenarios on demand, and the
-demo would be flaky in front of whoever you're showing it to.
+The custom SDK tools in this module read from research_pipeline.fixtures
+instead of external APIs or local document stores. They are exposed
+through an in-process MCP server so subagents can exercise realistic tool
+calls while keeping results repeatable across demos and benchmarks.
 """
 from __future__ import annotations
 
@@ -36,21 +18,11 @@ from research_pipeline.fixtures import ARTICLES, DOCUMENTS, KNOWN_TOPIC_IDS, TIM
 
 def _topic_enum_schema(description: str) -> dict[str, Any]:
     """
-    WHAT: A JSON Schema (not the `{"name": type}` shorthand) that
-    constrains the `topic_id` argument to the fixed set of topic IDs
-    fixtures.py actually knows about, via an `enum`. The Python `@tool`
-    decorator's dict shorthand has no enum support - the SDK docs are
-    explicit that an enum requires the full JSON Schema dict form.
+    Build a JSON Schema that restricts topic_id to known fixture IDs.
 
-    WHY: this is what makes "trigger a timeout on demand" reliable
-    despite the tool being called by an LLM rather than by our own code:
-    the LLM can only pass one of a fixed set of strings, so the same
-    subagent prompt reliably lands on the same fixture data (or the same
-    simulated failure) every run. Without the enum, the subagent could
-    paraphrase the topic ("EV adoption stats" vs. "electric vehicle
-    market share") and the mock tool would have nothing to match against.
-
-    EXAM TASK: Task 2.4 - JSON Schema tool input definitions.
+    The enum keeps LLM-generated tool calls aligned with the fixture
+    registry, preventing paraphrased topic names from bypassing the
+    deterministic scenarios.
     """
     return {
         "type": "object",
@@ -75,15 +47,10 @@ async def search_web(args: dict[str, Any]) -> dict[str, Any]:
     topic_id = args["topic_id"]
 
     if topic_id in TIMEOUT_TOPICS:
-        # WHAT: simulate a network timeout deterministically, keyed off
-        # topic_id rather than randomness or a real clock race.
-        # WHY (Task 5.1): the exercise asks for a fixture that makes
-        # web_researcher time out "on demand" - this topic_id reliably
-        # reproduces the failure every single run.
-        # is_error=True (not a raised exception) lets us compose the
-        # exact message web_researcher's prompt tells it to expect,
-        # instead of leaving it to whatever string a raw exception
-        # would produce - see custom-tools.md's "Handle errors" section.
+        # Simulate a timeout deterministically by topic_id instead of
+        # using randomness or a real network race. Returning is_error=True
+        # gives the subagent a structured tool failure to report while
+        # preserving a stable, readable error message.
         await asyncio.sleep(2)
         return {
             "content": [
@@ -147,20 +114,15 @@ async def fetch_documents(args: dict[str, Any]) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": "\n".join(lines)}]}
 
 
-# WHAT: wraps both tools in a single in-process MCP server named
-# "research_tools". WHY one server for both: they share one data domain
-# (this project's mock fixtures) and one lifecycle - there is no reason
-# to pay for two separate server registrations here.
+# Both tools share the same fixture-backed data domain, so a single
+# in-process MCP server keeps registration and lifecycle management simple.
 research_tools_server = create_sdk_mcp_server(
     name="research_tools",
     version="1.0.0",
     tools=[search_web, fetch_documents],
 )
 
-# Fully-qualified tool names, in the mcp__{server_name}__{tool_name} form
-# the SDK requires in allowed_tools / AgentDefinition.tools. Named
-# constants here (rather than the literal string repeated in
-# agents_config.py) so a future rename of the server can't silently
-# desync one call site from another.
+# Fully-qualified tool names used by allowed_tools and AgentDefinition.tools.
+# Centralizing them prevents drift if the MCP server or tool names change.
 SEARCH_WEB_TOOL = "mcp__research_tools__search_web"
 FETCH_DOCUMENTS_TOOL = "mcp__research_tools__fetch_documents"

@@ -1,26 +1,14 @@
 """
-verification.py - automated, deterministic checks on subagent output.
+Deterministic verification utilities for subagent output.
 
-WHAT: verify_findings_have_sources() parses a subagent's raw JSON result
-and asserts every finding carries all five required fields, non-empty,
-returning typed Finding objects. classify_coverage() applies a simple,
-code-level (not LLM-judged) rule for whether a topic ended up
-WELL-SUPPORTED / LIMITED COVERAGE / NOT COVERED.
+verify_findings_have_sources() parses a subagent's raw JSON result and
+asserts that every finding includes the required attribution fields.
+classify_coverage() provides a simple code-level coverage label based on
+finding count and retrieval failures.
 
-WHY this has to be code, not another LLM call grading the first LLM's
-output: Task 4.2 explicitly asks for "a verification function that
-asserts no claim in the output is missing its source." An assertion
-implies a deterministic pass/fail a test suite could run on every commit
-- an LLM judge is itself non-deterministic and would just move the "did
-this actually happen" question one level up without answering it.
-
-EXAM TASK: Task 4.2 - deterministic verification of structured output.
-
-ANTI-PATTERN: eyeballing the synthesizer's Markdown report to see if
-attribution "looks present". Markdown is exactly the free-form format
-Task 4.2 says not to trust for this - a missing source_url on one claim
-in a 40-line report is easy to miss by reading, trivial to catch by
-asserting against the structured JSON before synthesis ever happens.
+Keeping these checks deterministic makes attribution failures suitable
+for automated tests rather than relying on manual review of a generated
+Markdown report.
 """
 from __future__ import annotations
 
@@ -31,29 +19,17 @@ from research_pipeline.schemas import REQUIRED_FINDING_FIELDS, CoverageLevel, Fi
 
 
 class MissingSourceError(AssertionError):
-    """Raised when a finding is missing one or more required attribution
-    fields, or when a subagent's output isn't valid JSON at all (which
-    itself violates the JSON-only contract every subagent prompt states
-    in agents_config.py)."""
+    """Raised when a subagent result is invalid or missing attribution."""
 
 
 def verify_findings_have_sources(raw_json_result: str, *, subagent_name: str) -> list[Finding]:
     """
-    Parses a subagent's raw JSON text - the
-    `{"status": "ok", "findings": [...]}` or
-    `{"status": "error", "failure": {...}}` contract defined in
-    agents_config.py - and asserts every finding present has all
-    REQUIRED_FINDING_FIELDS, non-empty.
+    Parse a subagent result and validate all available findings.
 
-    Returns the findings that passed as typed Finding objects: for
-    status="ok" these are `findings`; for status="error" these are
-    `failure.partial_results`, so partial coverage can still be verified
-    and used downstream even when the primary call failed.
-
-    Raises MissingSourceError on the first violation found, naming
-    exactly which field, on which claim, from which subagent - because
-    "verification failed" alone isn't actionable inside study material
-    you're trying to read and learn from.
+    Successful results validate `findings`; error results validate
+    `failure.partial_results` so partial evidence can still be used
+    downstream. The first missing field raises MissingSourceError with
+    the subagent name, claim text, and field name.
     """
     try:
         payload = json.loads(raw_json_result)
@@ -86,16 +62,11 @@ def classify_coverage(
     *, corroborating_finding_count: int, failure_present: bool
 ) -> CoverageLevel:
     """
-    WHAT: A deliberately simple, deterministic rule - not an LLM
-    judgment - for how confident a report section should be about a
-    given claim/topic, based only on how many independent findings
-    support it.
+    Classify evidence coverage using deterministic pipeline metadata.
 
-    WHY code, not the synthesizer's own say-so: Task 5.1 requires the
-    pipeline (not the LLM being studied) to annotate coverage gaps, so
-    this classification stays independently checkable even if a future
-    prompt change made the synthesizer sound more confident than the
-    underlying evidence supports.
+    A topic with no findings is not covered. A topic with one finding or
+    a retrieval failure has limited coverage. Multiple corroborating
+    findings without a failure are treated as well supported.
     """
     if corroborating_finding_count == 0:
         return "NOT COVERED"
